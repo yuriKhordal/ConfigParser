@@ -12,6 +12,7 @@ Can be used with any text file, The way it works is that it is given a stream th
 * A valid setting line is a line with any amount of whitespace followed by a single word(no space in the middle) name consisting of valid characters, followed by a separator character(by default, `=`) with any amount of whitespace before and after it, followed by a value of any type, followed by an optional comment.
 * A line that has non\-whitespace and non\-comment characters but no separator is invalid and will throw a FormatException.
 
+\* Because Save() and Delete() use a StringBuilder as a buffer, files above 2GB will crash the program. Load ***should*** work fine though.
 ### Examples of valid lines:
 ```
 ```
@@ -76,6 +77,10 @@ char SeparatorChar { get; }
 ```
 
 ### Methods
+Delete a setting from both the config file and object.
+```CSharp
+void Delete(string setting);
+```
 Save the changes to the config file. Any new settings will be appended to the end of the file
 ```CSharp
 void Save();
@@ -108,6 +113,8 @@ cfg["github"] = "false";
 cfg["link"] = "";
 cfg["colour"] = "Red";
 
+cfg.Delete("pet");
+
 cfg.Save();
 
 ```
@@ -138,7 +145,6 @@ link =  # link to the page
 
 # settings
 username = yKhor
-pet = 
 theme = dark
 
 

@@ -17,6 +17,10 @@ namespace ConfigParser {
 		///<summary>The character that represents the start of a value.</summary>
 		char SeparatorChar { get; }
 
+		///<summary>Delete a setting from the config file and object.</summary>
+		///<param name="setting">The setting to delete.</param>
+		void Delete(string setting);
+
 		///<summary>Save the settings from the object to the config file.</summary>
 		void Save();
 		///<summary>Load the settings from the config file to the object.</summary>
@@ -24,6 +28,8 @@ namespace ConfigParser {
 	}
 
 	///<inheritdoc cref="IConfig"/>
+	///<remarks>Because Save() and Delete() use a StringBuilder as a buffer, files above 2GB
+	/// will crash the program. Load *should* work fine though.</remarks>
 	public class Config : IConfig {
 		///<inheritdoc cref="CommentChar"/>
 		protected char comment;
@@ -108,7 +114,85 @@ namespace ConfigParser {
 			this.charAccepted = charAccepted is null ? DefaultCharAccepted : charAccepted;
 		}
 
+		///<inheritdoc cref="IConfig.Delete(string)"/>
+		///<remarks>After the method returns, the position of the stream is set to 0.
+		/// Unless an exception is thrown.</remarks>
+		///<exception cref="ArgumentException">Setting is empty or null.</exception>
+		///<exception cref="FormatException">Setting name is illegal(whitespace, comment,
+		/// or non accepted characters)</exception>
+		///<exception cref="IOException">An I/O error occurs.</exception>
+		///<exception cref="NotSupportedException">The stream does not support seeking.</exception>
+		///<exception cref="ObjectDisposedException">Methods were called after the stream
+		/// was closed.</exception>
+		///<exception cref="OutOfMemoryException">There is insufficient memory to
+		/// allocate a buffer for the returned string.</exception>
+		public virtual void Delete(string setting) {
+			//Check validity
+			if (string.IsNullOrEmpty(setting))
+				throw new ArgumentException("Setting name is null or empty", "setting");
+			foreach (char c in setting) {
+				if (char.IsWhiteSpace(c)) throw new FormatException("Space in " +
+					$"the middle of the setting name: '{setting}'");
+				if (c == comment) throw new FormatException("Comment char" +
+					$"('{comment}') in the middle of the setting name: '{setting}'");
+				if (!charAccepted(c)) throw new FormatException("Illegal " +
+					 $"char '{c}' in the setting name: '{setting}'");
+			}
+
+			//Go to the start of the stream
+			stream.Position = 0;
+			StreamReader reader = new StreamReader(stream);
+			StringBuilder lines = new StringBuilder((int)stream.Length);
+			string line;
+
+			//Read the stream line by lines
+			while(!((line = reader.ReadLine()) is null)) {
+				int index = 0;
+				//Skip leading whitespace
+				while (index < line.Length && char.IsWhiteSpace(line[index])) index++;
+				//Empty line
+				if (index >= line.Length) {
+					lines.AppendLine(line);
+					continue;
+				}
+				//Comment line
+				if (line[index] == comment) {
+					lines.AppendLine(line);
+					continue;
+				}
+
+				//Compare setting line with setting name
+				for (int i = 0; i < setting.Length && index < line.Length; i++, index++) {
+					if (line[index] == setting[i]) continue;
+
+					while (index < line.Length) index++;
+				}
+
+				//Skip whitespace after setting name
+				while (index < line.Length && char.IsWhiteSpace(line[index])) index++;
+
+				//Check for separator, AppendLine from for loop happens here
+				if (index >= line.Length || line[index] != separator) {
+					lines.AppendLine(line);
+				}
+
+				//Delete setting
+				settings.Remove(setting);
+				//line is not appended to 'lines'
+			}
+
+			//Write all the lines back to the file
+			stream.SetLength(0);
+			stream.Position = 0;
+			StreamWriter writer = new StreamWriter(stream);
+			for (int i = 0; i < lines.Length; i++) writer.Write(lines[i]);
+			writer.Flush();
+			stream.Position = 0;
+		}
+
 		///<inheritdoc cref="IConfig.Save"/>
+		///<remarks>After the method returns, the position of the stream is set to 0.
+		/// Unless an exception is thrown.</remarks>
 		///<exception cref="IOException">An I/O error occurs.</exception>
 		///<exception cref="NotSupportedException">The stream does not support seeking.</exception>
 		///<exception cref="ObjectDisposedException">Methods were called after the stream
@@ -216,6 +300,7 @@ namespace ConfigParser {
 nestedBreak:;
 			}//end while(line)
 
+			//Write the modified lines to the file
 			stream.SetLength(0);
 			stream.Position = 0;
 			StreamWriter writer = new StreamWriter(stream);
@@ -232,11 +317,12 @@ nestedBreak:;
 					writer.Write($"{pair.Key} = {pair.Value}");
 				}
 			writer.Flush();
-
-			stream.Seek(0, SeekOrigin.End);
+			stream.Position = 0;
 		}
 
 		///<inheritdoc cref="IConfig.Load"/>
+		///<remarks>After the method returns, the position of the stream is returned to
+		/// where it was before calling the method. Unless an exception is thrown.</remarks>
 		///<exception cref="FormatException">Fail to parse text inside the stream.</exception>
 		///<exception cref="IOException">An I/O error occurs.</exception>
 		///<exception cref="NotSupportedException">The stream does not support seeking.</exception>

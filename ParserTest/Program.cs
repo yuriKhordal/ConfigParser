@@ -29,6 +29,8 @@ namespace ParserTest {
 			config["zombie_health"] = "35";
 			config["offline"] = "false #dd";
 			config["pc_mana"] = null;
+			config.Delete("pc_health");
+			config.Delete("pc_mana");
 			Console.WriteLine("Config:");
 			foreach((string setting, string value) in config) {
 				Console.WriteLine($"{setting} => '{value}'");
@@ -42,7 +44,7 @@ namespace ParserTest {
 			Console.WriteLine("==================================");
 		}
 
-		void test() {
+		void example() {
 			Config cfg = new Config(File.Open("config.cfg", FileMode.OpenOrCreate));
 			cfg.Load();
 
@@ -54,6 +56,8 @@ namespace ParserTest {
 			cfg["github"] = "false";
 			cfg["link"] = "";
 			cfg["colour"] = "Red";
+
+			cfg.Delete("pet");
 
 			cfg.Save();
 		}
